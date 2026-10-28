@@ -1,0 +1,33 @@
+[package]
+name = "qualia-minigames-ffi"
+version = "0.1.0"
+edition = "2024"
+# MSRV policy: 1.89 is the minimum supported version, not the development toolchain.
+# The development toolchain is pinned to stable by rust-toolchain.toml.
+rust-version = "1.89"
+description = "UniFFI bindings for the QualiaMinigames core library, so every front end can call the same rules"
+license = "LGPL-3.0-or-later"
+repository = "https://github.com/QualiaMinigames/QualiaMinigames-FFI"
+readme = "README.en.md"
+keywords = ["game", "minigames", "uniffi", "ffi"]
+categories = ["games", "api-bindings"]
+exclude = [
+    "/deny.toml",
+    # Pins the toolchain of this checkout only; a consumer builds with its own.
+    "/rust-toolchain.toml",
+]
+
+[lib]
+# The Kotlin bindings load the library through JNA, which needs a dynamic library. The
+# static one is not used by any current front end and is left out.
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+# The path is what a local build uses; the version is what crates.io resolves, because a
+# published crate carries its dependencies by version and this one has to build on a
+# machine that has never seen the sibling directory.
+qualia-minigames-core = { version = "=0.1.0", path = "../Core" }
+thiserror = "2.0.21"
+uniffi = "0.32.2"
+
+[dev-dependencies]
