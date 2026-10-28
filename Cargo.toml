@@ -23,10 +23,11 @@ exclude = [
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-# The path is what a local build uses; the version is what crates.io resolves, because a
-# published crate carries its dependencies by version and this one has to build on a
-# machine that has never seen the sibling directory.
-qualia-minigames-core = { version = "=0.1.0", path = "../Core" }
+# The dependency is by version, not by path: a published crate carries its dependencies by
+# version, and this repository has to build on a machine that has never seen the sibling
+# checkout. A local build against an unpublished core uses a `[patch.crates-io]` override,
+# which lives in `.cargo/config.toml` and is not committed.
+qualia-minigames-core = "=0.1.0"
 thiserror = "2.0.21"
 uniffi = "0.32.2"
 

@@ -34,3 +34,6 @@ Desktop.ini
 .env
 *.local.toml
 secrets/
+
+# The local patch that points the core dependency at the sibling checkout.
+/.cargo/
