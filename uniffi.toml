@@ -1,0 +1,12 @@
+# The bindings' configuration.
+#
+# `package_name` is what a Kotlin front end imports, and `cdylib_name` is the library the
+# generated code loads. Both are part of the interface between this crate and the front end,
+# so they are stated here rather than being derived from the crate name: a front end that
+# renamed its module would otherwise need a change on this side as well.
+#
+# UniFFI reads this file when the bindings are generated with `--config`.
+
+[bindings.kotlin]
+package_name = "com.qiushui1012.app.minigames.ffi"
+cdylib_name = "qualia_minigames_ffi"
