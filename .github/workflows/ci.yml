@@ -56,6 +56,16 @@ jobs:
       # The bindings are what a front end consumes, so their generation is part of what this
       # workflow verifies. The generated file is not committed; it is a build product of the
       # library this job has just built.
+      #
+      # `--config` is deliberately not passed. `uniffi.toml` beside the crate is read by the
+      # generator on its own, and passing it explicitly now takes the flag as a global config
+      # file, which a crate-local one is not: it warns that the file is in the old flat format.
+      # The package it declares is checked instead, from the file that was actually written.
+      #
+      # The output path is found rather than written down. UniFFI lays the file out under that
+      # package name, and the step used to assert the path the name produced before it was set:
+      # the check then failed on a generation that had in fact succeeded, which is a gate that
+      # reports the opposite of what it means.
       - name: Generate the Kotlin bindings
         shell: bash
         run: |
@@ -64,8 +74,24 @@ jobs:
           cargo install uniffi --version 0.32.2 --features cli --locked
           uniffi-bindgen generate --library target/release/qualia_minigames_ffi.dll \
             --language kotlin --out-dir build/bindings --no-format
-          test -s build/bindings/uniffi/qualia_minigames_ffi/qualia_minigames_ffi.kt
-          echo "The Kotlin bindings were generated."
+          mapfile -t generated < <(find build/bindings -name 'qualia_minigames_ffi.kt' -type f)
+          if [ "${#generated[@]}" -ne 1 ]; then
+            echo "::error::expected one qualia_minigames_ffi.kt under build/bindings, found ${#generated[@]}"
+            find build/bindings -type f
+            exit 1
+          fi
+          if [ ! -s "${generated[0]}" ]; then
+            echo "::error::${generated[0]} is empty"
+            exit 1
+          fi
+          # The package the file declares is the one a front end imports. A mismatch is a
+          # binding every front end would fail to resolve, and no other gate here sees it.
+          if ! grep -q '^package com\.qiushui1012\.app\.minigames\.ffi' "${generated[0]}"; then
+            echo "::error::${generated[0]} does not declare the package uniffi.toml asks for"
+            head -n 5 "${generated[0]}"
+            exit 1
+          fi
+          echo "The Kotlin bindings were generated at ${generated[0]}."
 
   msrv:
     name: MSRV 1.89
