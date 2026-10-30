@@ -24,7 +24,7 @@ QualiaMinigames 的 UniFFI 绑定层。
 | 项 | 值 |
 |---|---|
 | crate 名 | `qualia-minigames-ffi` |
-| 版本 | `0.1.0` |
+| 版本 | `0.1.1` |
 | 类型 | `cdylib` + `staticlib` |
 | Edition | 2024 |
 | MSRV | **1.89** |

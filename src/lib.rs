@@ -280,6 +280,18 @@ impl PipesGame {
         u32::from(self.lock().piece(index))
     }
 
+    /// Returns every cell's side mask at once, in row-major order.
+    ///
+    /// A board is drawn from this rather than from one [`Self::piece`] call per cell: a 35 by 35
+    /// board is 1225 crossings of the boundary for one frame, which costs more than the drawing
+    /// it feeds. One call returns the same values.
+    pub fn pieces(&self) -> Vec<u32> {
+        let game = self.lock();
+        (0..game.board().cells())
+            .map(|index| u32::from(game.piece(index)))
+            .collect()
+    }
+
     /// Returns the side mask a cell is solved with.
     pub fn solved_piece(&self, index: u32) -> u32 {
         u32::from(self.lock().board().solved_piece(index))
@@ -530,6 +542,21 @@ mod tests {
         assert_eq!(game.undo_count(), 1);
         assert!(game.undo());
         assert_eq!(game.piece(12), before);
+    }
+
+    #[test]
+    fn every_piece_comes_back_in_one_call() {
+        // The batched read has to agree with the per-cell one: it exists only to save
+        // crossings, and a batch that disagreed with the cell it replaced would draw a board
+        // that the rules did not describe.
+        let game = PipesGame::new(7, PipesLayout::Wrapped, 11).expect("7 is a valid size");
+        game.turn_clockwise(3);
+        game.turn_anti_clockwise(20);
+        let batch = game.pieces();
+        assert_eq!(batch.len(), 49);
+        for (index, mask) in batch.iter().enumerate() {
+            assert_eq!(*mask, game.piece(index as u32), "cell {index}");
+        }
     }
 
     #[test]

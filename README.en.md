@@ -25,7 +25,7 @@ boundary, decisions do not.
 | Item | Value |
 |---|---|
 | crate | `qualia-minigames-ffi` |
-| Version | `0.1.0` |
+| Version | `0.1.1` |
 | Type | `cdylib` + `staticlib` |
 | Edition | 2024 |
 | MSRV | **1.89** |
