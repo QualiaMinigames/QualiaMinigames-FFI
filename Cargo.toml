@@ -1,6 +1,6 @@
 [package]
 name = "qualia-minigames-ffi"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 # MSRV policy: 1.89 is the minimum supported version, not the development toolchain.
 # The development toolchain is pinned to stable by rust-toolchain.toml.
@@ -27,7 +27,7 @@ crate-type = ["cdylib", "staticlib"]
 # version, and this repository has to build on a machine that has never seen the sibling
 # checkout. A local build against an unpublished core uses a `[patch.crates-io]` override,
 # which lives in `.cargo/config.toml` and is not committed.
-qualia-minigames-core = "=0.1.1"
+qualia-minigames-core = "=0.2.0"
 thiserror = "2.0.21"
 uniffi = "0.32.2"
 

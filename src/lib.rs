@@ -67,6 +67,42 @@ pub enum SudokuDifficulty {
     Hard,
 }
 
+/// Which rules a minesweeper board is generated under.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Enum)]
+pub enum MinesweeperMode {
+    /// A board a player may have to guess on.
+    Normal,
+    /// A board two deductions can finish, when one is found within the attempt budget.
+    NoGuess,
+}
+
+/// Where a minesweeper game stands.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Enum)]
+pub enum MinesweeperPhase {
+    /// The board has not been generated yet, because no cell has been opened.
+    Pending,
+    /// The board is generated and the game is being played.
+    Playing,
+    /// Every cell that holds no mine is open.
+    Won,
+    /// A mine was opened.
+    Lost,
+}
+
+/// What opening a minesweeper cell did.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Enum)]
+pub enum MinesweeperEvent {
+    /// The cell and possibly a flood of its neighbours opened.
+    Revealed,
+    /// The cell held a mine, which ended the game.
+    HitMine,
+    /// The last cell that could be opened was opened.
+    Won,
+    /// The cell could not be opened: the game is over or the cell is open, flagged or outside
+    /// the board.
+    Ignored,
+}
+
 /// What can go wrong while reading a saved game.
 ///
 /// The variants mirror the core's own snapshot errors one for one. They are a separate enum
@@ -166,6 +202,46 @@ impl From<qualia_minigames_core::sudoku::Difficulty> for SudokuDifficulty {
     }
 }
 
+impl From<MinesweeperMode> for qualia_minigames_core::minesweeper::Mode {
+    fn from(mode: MinesweeperMode) -> Self {
+        match mode {
+            MinesweeperMode::Normal => Self::Normal,
+            MinesweeperMode::NoGuess => Self::NoGuess,
+        }
+    }
+}
+
+impl From<qualia_minigames_core::minesweeper::Mode> for MinesweeperMode {
+    fn from(mode: qualia_minigames_core::minesweeper::Mode) -> Self {
+        match mode {
+            qualia_minigames_core::minesweeper::Mode::Normal => Self::Normal,
+            qualia_minigames_core::minesweeper::Mode::NoGuess => Self::NoGuess,
+        }
+    }
+}
+
+impl From<qualia_minigames_core::minesweeper::Phase> for MinesweeperPhase {
+    fn from(phase: qualia_minigames_core::minesweeper::Phase) -> Self {
+        match phase {
+            qualia_minigames_core::minesweeper::Phase::Pending => Self::Pending,
+            qualia_minigames_core::minesweeper::Phase::Playing => Self::Playing,
+            qualia_minigames_core::minesweeper::Phase::Won => Self::Won,
+            qualia_minigames_core::minesweeper::Phase::Lost => Self::Lost,
+        }
+    }
+}
+
+impl From<qualia_minigames_core::minesweeper::Event> for MinesweeperEvent {
+    fn from(event: qualia_minigames_core::minesweeper::Event) -> Self {
+        match event {
+            qualia_minigames_core::minesweeper::Event::Revealed => Self::Revealed,
+            qualia_minigames_core::minesweeper::Event::HitMine => Self::HitMine,
+            qualia_minigames_core::minesweeper::Event::Won => Self::Won,
+            qualia_minigames_core::minesweeper::Event::Ignored => Self::Ignored,
+        }
+    }
+}
+
 /// Returns the version of the core library these bindings were built against.
 #[uniffi::export]
 pub fn core_version() -> String {
@@ -194,6 +270,79 @@ pub fn sudoku_size() -> u32 {
 #[uniffi::export]
 pub fn seed_from_text(text: String) -> u64 {
     qualia_minigames_core::random::seed_from_text(&text)
+}
+
+/// Returns the smallest minesweeper board, in cells on a side.
+#[uniffi::export]
+pub fn minesweeper_min_size() -> u32 {
+    qualia_minigames_core::minesweeper::MIN_SIZE
+}
+
+/// Returns the largest minesweeper board, in cells on a side.
+#[uniffi::export]
+pub fn minesweeper_max_size() -> u32 {
+    qualia_minigames_core::minesweeper::MAX_SIZE
+}
+
+/// Returns the lowest share of a board a mine field accepts, in thousandths of a percent.
+#[uniffi::export]
+pub fn minesweeper_input_per_mille_min() -> u32 {
+    qualia_minigames_core::minesweeper::INPUT_PER_MILLE_MIN
+}
+
+/// Returns the highest share of a board a mine field accepts, in thousandths of a percent.
+#[uniffi::export]
+pub fn minesweeper_input_per_mille_max() -> u32 {
+    qualia_minigames_core::minesweeper::INPUT_PER_MILLE_MAX
+}
+
+/// Returns the lowest share the mine slider covers, in thousandths of a percent.
+#[uniffi::export]
+pub fn minesweeper_slider_per_mille_min() -> u32 {
+    qualia_minigames_core::minesweeper::SLIDER_PER_MILLE_MIN
+}
+
+/// Returns the highest share the mine slider covers, in thousandths of a percent.
+#[uniffi::export]
+pub fn minesweeper_slider_per_mille_max() -> u32 {
+    qualia_minigames_core::minesweeper::SLIDER_PER_MILLE_MAX
+}
+
+/// Returns the highest share the mine slider covers in no-guess mode, in thousandths of a
+/// percent.
+#[uniffi::export]
+pub fn minesweeper_noguess_slider_per_mille_max() -> u32 {
+    qualia_minigames_core::minesweeper::NOGUESS_SLIDER_PER_MILLE_MAX
+}
+
+/// Returns the highest share the mine field accepts in no-guess mode, in thousandths of a
+/// percent.
+#[uniffi::export]
+pub fn minesweeper_noguess_input_per_mille_max() -> u32 {
+    qualia_minigames_core::minesweeper::NOGUESS_INPUT_PER_MILLE_MAX
+}
+
+/// Returns the share from which a no-guess board is likely to fall back, in thousandths of a
+/// percent.
+#[uniffi::export]
+pub fn minesweeper_noguess_warn_per_mille() -> u32 {
+    qualia_minigames_core::minesweeper::NOGUESS_WARN_PER_MILLE
+}
+
+/// Returns the shares a mine slider snaps to, in thousandths of a percent, ascending.
+#[uniffi::export]
+pub fn minesweeper_snap_per_mille() -> Vec<u32> {
+    qualia_minigames_core::minesweeper::SNAP_PER_MILLE.to_vec()
+}
+
+/// Returns how many mines a share of a board converts to.
+///
+/// The share and the answer are both integers: the share is in thousandths of a percent, so
+/// that `12.3%` is `123`, and a border a float rounds the wrong way is where a nine-mine
+/// beginner board would come from.
+#[uniffi::export]
+pub fn minesweeper_mines_for_per_mille(cells: u32, per_mille: u32) -> u32 {
+    qualia_minigames_core::minesweeper::mines_for_per_mille(cells, per_mille)
 }
 
 /// Returns the seed a date produces, so a puzzle can be the same for everyone that day.
@@ -368,6 +517,13 @@ pub struct SudokuGame {
 #[uniffi::export]
 impl SudokuGame {
     /// Generates a puzzle of a difficulty.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the seed produces no puzzle of that difficulty within the attempt budget,
+    /// which a generated seed does not do. A seed a player typed goes through
+    /// [`sudoku_try_generate`] instead: a panic that crosses a language boundary ends the
+    /// process rather than the call.
     #[uniffi::constructor]
     pub fn generate(difficulty: SudokuDifficulty, seed: u64) -> Self {
         Self {
@@ -496,6 +652,206 @@ impl SudokuGame {
 impl SudokuGame {
     /// Locks the game for one call.
     fn lock(&self) -> MutexGuard<'_, qualia_minigames_core::sudoku::Game> {
+        self.game
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Generates a sudoku puzzle, or reports that the seed cannot produce one of the difficulty.
+///
+/// This is a function rather than a constructor because it can answer nothing: a constructor
+/// always builds an object, and a null is what says the seed does not fit. It is what a screen
+/// that lets a player type a seed calls, so that a seed which produces no puzzle of the chosen
+/// difficulty leaves the form open with a message rather than taking the process down with a
+/// panic from the infallible [`SudokuGame::generate`].
+#[uniffi::export]
+pub fn sudoku_try_generate(
+    difficulty: SudokuDifficulty,
+    seed: u64,
+) -> Option<std::sync::Arc<SudokuGame>> {
+    qualia_minigames_core::sudoku::Game::try_generate(difficulty.into(), seed).map(|game| {
+        std::sync::Arc::new(SudokuGame {
+            game: Mutex::new(game),
+        })
+    })
+}
+
+/// One game of minesweeper, as the front end holds it.
+///
+/// The board is generated lazily for a random game: the first cell a player opens is what
+/// lays the mines down, which is what makes that cell safe. A game started from an explicit
+/// seed is generated when it is created instead.
+#[derive(Debug, uniffi::Object)]
+pub struct MinesweeperGame {
+    /// The core's game, shared through the object.
+    game: Mutex<qualia_minigames_core::minesweeper::Game>,
+}
+
+#[uniffi::export]
+impl MinesweeperGame {
+    /// Starts a game whose board is generated when the first cell is opened.
+    ///
+    /// The mine count is bounded by the cells outside the first click's protected window: a
+    /// game that promised a safe first click and laid a mine in it would be a game that broke
+    /// its own rule.
+    #[uniffi::constructor]
+    pub fn random(
+        width: u32,
+        height: u32,
+        mines: u32,
+        mode: MinesweeperMode,
+        base_seed: u64,
+    ) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::minesweeper::Game::random(
+                width,
+                height,
+                mines,
+                mode.into(),
+                base_seed,
+            )?),
+        })
+    }
+
+    /// Starts a game on a board generated from an explicit seed.
+    ///
+    /// The board exists at once and its first click is not protected, which is what a seed a
+    /// player typed means: the same seed always opens the same board.
+    #[uniffi::constructor]
+    pub fn from_seed(
+        width: u32,
+        height: u32,
+        mines: u32,
+        mode: MinesweeperMode,
+        seed: u64,
+    ) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::minesweeper::Game::from_seed(
+                width,
+                height,
+                mines,
+                mode.into(),
+                seed,
+            )?),
+        })
+    }
+
+    /// Reads a saved game.
+    #[uniffi::constructor]
+    pub fn from_snapshot(bytes: Vec<u8>) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::minesweeper::Game::from_snapshot(
+                &bytes,
+            )?),
+        })
+    }
+
+    /// Writes the game, so it can be saved and read back.
+    pub fn to_snapshot(&self) -> Vec<u8> {
+        self.lock().to_snapshot()
+    }
+
+    /// Returns the number of cells across.
+    pub fn width(&self) -> u32 {
+        self.lock().width()
+    }
+
+    /// Returns the number of cells down.
+    pub fn height(&self) -> u32 {
+        self.lock().height()
+    }
+
+    /// Returns the number of cells on the board.
+    pub fn cell_count(&self) -> u32 {
+        self.lock().cells()
+    }
+
+    /// Returns how many mines the board holds.
+    pub fn mine_count(&self) -> u32 {
+        self.lock().mine_count()
+    }
+
+    /// Returns how many cells are flagged.
+    pub fn flag_count(&self) -> u32 {
+        self.lock().flag_count()
+    }
+
+    /// Returns how many mines the flags leave unaccounted for.
+    ///
+    /// The answer goes negative when more cells are flagged than the board holds mines, which
+    /// the game allows and a counter is expected to show.
+    pub fn remaining_mines(&self) -> i32 {
+        self.lock().remaining_mines()
+    }
+
+    /// Returns where the game stands.
+    pub fn phase(&self) -> MinesweeperPhase {
+        self.lock().phase().into()
+    }
+
+    /// Returns the rules the board was asked for.
+    pub fn mode(&self) -> MinesweeperMode {
+        self.lock().mode().into()
+    }
+
+    /// Returns whether a no-guess board could not be found and the game fell back to normal.
+    pub fn fell_back(&self) -> bool {
+        self.lock().fell_back()
+    }
+
+    /// Returns the seed the board was generated from, or zero while none has been.
+    pub fn seed(&self) -> u64 {
+        self.lock().seed()
+    }
+
+    /// Returns what a cell shows now.
+    ///
+    /// The value is the number of neighbouring mines for an open cell that holds none, or
+    /// [`MinesweeperGame::cells_state`]'s code for a covered, flagged or exploded cell.
+    /// An index outside the board answers `9`, which is what a covered cell answers: a cell
+    /// that does not exist and a cell nobody has opened look the same to a drawing.
+    pub fn cell(&self, index: u32) -> u8 {
+        let game = self.lock();
+        if index >= game.cells() {
+            return qualia_minigames_core::minesweeper::COVERED;
+        }
+        game.cell(index)
+    }
+
+    /// Returns every cell's state at once, in row-major order.
+    ///
+    /// A board is drawn from this rather than from one [`Self::cell`] call per cell: a 128 by
+    /// 128 board is 16384 crossings of the language boundary for one frame, which costs more
+    /// than the drawing it feeds. The values are the neighbouring mine count for an open cell
+    /// that holds none, `9` for a covered cell, `10` for a flagged one and `11` for an open
+    /// mine.
+    pub fn cells_state(&self) -> Vec<u8> {
+        self.lock().cells_state()
+    }
+
+    /// Opens a cell.
+    ///
+    /// An index outside the board is ignored rather than rejected: the caller is a screen
+    /// that only offers cells of the board, and a panic across the boundary would take down
+    /// the process instead of one tap.
+    pub fn reveal(&self, index: u32) -> MinesweeperEvent {
+        self.lock().reveal(index).into()
+    }
+
+    /// Flags a covered cell, or takes the flag off a flagged one.
+    ///
+    /// Returns whether the cell was changed. An index outside the board changes nothing.
+    pub fn toggle_flag(&self, index: u32) -> bool {
+        self.lock().toggle_flag(index)
+    }
+}
+
+/// The private half of [`MinesweeperGame`], kept out of the exported block for the reason
+/// given on [`PipesGame`]'s.
+impl MinesweeperGame {
+    /// Locks the game for one call.
+    fn lock(&self) -> MutexGuard<'_, qualia_minigames_core::minesweeper::Game> {
         self.game
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -675,6 +1031,154 @@ mod tests {
             daily_seed("2026-10-29".to_owned()),
             daily_seed("2026-10-29".to_owned())
         );
+    }
+
+    #[test]
+    fn a_sudoku_generation_can_report_that_a_seed_does_not_fit() {
+        // The fallible entry point answers the same puzzle as the infallible one when the seed
+        // does fit, which is what a screen relies on when it offers a seed at all.
+        let generated =
+            sudoku_try_generate(SudokuDifficulty::Easy, 5).expect("5 fits an easy puzzle");
+        let expected = SudokuGame::generate(SudokuDifficulty::Easy, 5);
+        assert_eq!(generated.seed(), expected.seed());
+        assert_eq!(generated.given_count(), expected.given_count());
+        assert_eq!(generated.to_snapshot(), expected.to_snapshot());
+    }
+
+    #[test]
+    fn a_minesweeper_game_waits_for_its_first_click() {
+        let game = MinesweeperGame::random(9, 9, 10, MinesweeperMode::Normal, 7)
+            .expect("9 by 9 at 10 mines is valid");
+        assert_eq!(game.width(), 9);
+        assert_eq!(game.height(), 9);
+        assert_eq!(game.cell_count(), 81);
+        assert_eq!(game.mine_count(), 10);
+        assert_eq!(game.phase(), MinesweeperPhase::Pending);
+        assert_eq!(game.seed(), 0);
+        assert_eq!(game.remaining_mines(), 10);
+        assert!(
+            game.cells_state().iter().all(|state| *state == 9),
+            "a pending board is covered"
+        );
+    }
+
+    #[test]
+    fn the_first_click_of_a_random_game_lays_the_mines_down_safely() {
+        let game = MinesweeperGame::random(9, 9, 10, MinesweeperMode::Normal, 7)
+            .expect("the parameters are valid");
+        assert_eq!(game.reveal(40), MinesweeperEvent::Revealed);
+        assert_eq!(game.phase(), MinesweeperPhase::Playing);
+        assert_ne!(game.seed(), 0);
+        let opened = game.cell(40);
+        assert!(opened <= 8, "the first click opened a mine: {opened}");
+    }
+
+    #[test]
+    fn a_game_started_from_a_seed_exists_at_once() {
+        let game = MinesweeperGame::from_seed(9, 9, 10, MinesweeperMode::Normal, 0x5eed)
+            .expect("the parameters are valid");
+        assert_eq!(game.phase(), MinesweeperPhase::Playing);
+        assert_eq!(game.seed(), 0x5eed);
+        let batch = game.cells_state();
+        assert_eq!(batch.len(), 81);
+        for (index, state) in batch.iter().enumerate() {
+            assert_eq!(*state, game.cell(index as u32), "cell {index}");
+        }
+    }
+
+    #[test]
+    fn a_mine_ends_the_game_across_the_boundary() {
+        // The mine is found by opening cells of a fresh board one at a time: a board started
+        // from a seed lays its mines down at once, so the cell that explodes is a fact of the
+        // seed and the test reads it rather than knowing it.
+        let mine = (0..81)
+            .find(|index| {
+                let probe = MinesweeperGame::from_seed(9, 9, 10, MinesweeperMode::Normal, 5)
+                    .expect("the parameters are valid");
+                probe.reveal(*index) == MinesweeperEvent::HitMine
+            })
+            .expect("a 10-mine board holds a cell that explodes");
+        let game = MinesweeperGame::from_seed(9, 9, 10, MinesweeperMode::Normal, 5)
+            .expect("the parameters are valid");
+        assert_eq!(game.reveal(mine), MinesweeperEvent::HitMine);
+        assert_eq!(game.phase(), MinesweeperPhase::Lost);
+        assert_eq!(game.reveal(0), MinesweeperEvent::Ignored);
+    }
+
+    #[test]
+    fn a_flag_changes_the_remaining_count_across_the_boundary() {
+        let game = MinesweeperGame::random(9, 9, 10, MinesweeperMode::Normal, 3)
+            .expect("the parameters are valid");
+        assert_eq!(game.remaining_mines(), 10);
+        assert!(game.toggle_flag(0));
+        assert_eq!(game.flag_count(), 1);
+        assert_eq!(game.remaining_mines(), 9);
+    }
+
+    #[test]
+    fn a_minesweeper_snapshot_survives_the_boundary() {
+        let game = MinesweeperGame::random(16, 16, 40, MinesweeperMode::NoGuess, 21)
+            .expect("the parameters are valid");
+        game.reveal(120);
+        game.toggle_flag(0);
+        let restored = MinesweeperGame::from_snapshot(game.to_snapshot()).expect("it is read");
+        assert_eq!(restored.cells_state(), game.cells_state());
+        assert_eq!(restored.mode(), game.mode());
+        assert_eq!(restored.fell_back(), game.fell_back());
+        assert_eq!(restored.remaining_mines(), game.remaining_mines());
+    }
+
+    #[test]
+    fn a_minesweeper_game_refuses_a_size_or_a_mine_count_outside_its_range() {
+        let error = MinesweeperGame::random(3, 9, 5, MinesweeperMode::Normal, 0).unwrap_err();
+        assert!(matches!(error, SnapshotFailure::Parameter { .. }));
+        let error = MinesweeperGame::random(129, 9, 5, MinesweeperMode::Normal, 0).unwrap_err();
+        assert!(matches!(error, SnapshotFailure::Parameter { .. }));
+        let error = MinesweeperGame::random(9, 9, 0, MinesweeperMode::Normal, 0).unwrap_err();
+        assert!(matches!(error, SnapshotFailure::Parameter { .. }));
+        // A 4 by 4 board protects four cells, so twelve mines fit at random and thirteen do
+        // not, which is the bound a promised safe first click puts on a game.
+        assert!(MinesweeperGame::random(4, 4, 12, MinesweeperMode::Normal, 0).is_ok());
+        assert!(MinesweeperGame::random(4, 4, 13, MinesweeperMode::Normal, 0).is_err());
+    }
+
+    #[test]
+    fn a_minesweeper_index_outside_the_board_is_ignored() {
+        let game = MinesweeperGame::random(9, 9, 10, MinesweeperMode::Normal, 3)
+            .expect("the parameters are valid");
+        assert_eq!(game.reveal(81), MinesweeperEvent::Ignored);
+        assert!(!game.toggle_flag(81));
+        assert_eq!(
+            game.cell(81),
+            9,
+            "a cell that does not exist reads as covered"
+        );
+    }
+
+    #[test]
+    fn a_broken_minesweeper_snapshot_is_reported_as_an_error() {
+        let error = MinesweeperGame::from_snapshot(vec![0]).unwrap_err();
+        assert_eq!(error, SnapshotFailure::UnsupportedVersion { version: 0 });
+    }
+
+    #[test]
+    fn the_minesweeper_constants_agree_with_the_core() {
+        assert_eq!(minesweeper_min_size(), 4);
+        assert_eq!(minesweeper_max_size(), 128);
+        assert_eq!(minesweeper_input_per_mille_min(), 100);
+        assert_eq!(minesweeper_input_per_mille_max(), 250);
+        assert_eq!(minesweeper_slider_per_mille_min(), 120);
+        assert_eq!(minesweeper_slider_per_mille_max(), 250);
+        assert_eq!(minesweeper_noguess_slider_per_mille_max(), 156);
+        assert_eq!(minesweeper_noguess_input_per_mille_max(), 206);
+        assert_eq!(minesweeper_noguess_warn_per_mille(), 180);
+        assert_eq!(
+            minesweeper_snap_per_mille(),
+            vec![120, 123, 150, 156, 180, 206, 220, 250]
+        );
+        assert_eq!(minesweeper_mines_for_per_mille(81, 123), 10);
+        assert_eq!(minesweeper_mines_for_per_mille(256, 156), 40);
+        assert_eq!(minesweeper_mines_for_per_mille(480, 206), 99);
     }
 
     #[test]

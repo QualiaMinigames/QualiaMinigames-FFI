@@ -25,7 +25,7 @@ boundary, decisions do not.
 | Item | Value |
 |---|---|
 | crate | `qualia-minigames-ffi` |
-| Version | `0.1.1` |
+| Version | `0.2.0` |
 | Type | `cdylib` + `staticlib` |
 | Edition | 2024 |
 | MSRV | **1.89** |
@@ -41,23 +41,28 @@ A front end generates the bindings at build time and then loads the dynamic libr
 uniffi-bindgen generate --library target\release\qualia_minigames_ffi.dll --language kotlin --out-dir build\bindings
 ```
 
-The generated Kotlin lands in `build/bindings/uniffi/qualia_minigames_ffi/`.
-`PipesGame` and `SudokuGame` are the two games, and `uniffiEnsureInitialized()` must run
-before the first call.
+The generated Kotlin lands in `build/bindings/com/qiushui1012/app/minigames/ffi/`.
+`PipesGame`, `SudokuGame` and `MinesweeperGame` are the three games, and
+`uniffiEnsureInitialized()` must run before the first call.
 
 ## Interface
 
 Pipes exports the board size, the layout, the side mask of every cell, turning, undo, the
 solved check, the cells on a loop, the cells water reaches and the water's starting cell.
 Sudoku exports the givens, the current digits, the candidate masks, entering, clearing,
-toggling a note, undo, the cells in conflict and the solved check. Both write themselves to
-bytes and read themselves back; the format belongs to the core, and the front end stores it
-without interpreting it.
+toggling a note, undo, the cells in conflict and the solved check. Minesweeper exports the
+width and height, the mine and flag counts, the mines left, the phase, the mode, the fallback
+flag, the seed, one cell's state and the whole board's state, opening a cell and flagging one;
+mine densities cross the boundary as integers in thousandths of a percent, and the core does
+the conversion. All three write themselves to bytes and read themselves back; the format
+belongs to the core, and the front end stores it without interpreting it.
 
 Reading a snapshot is the only operation that fails, and it fails through `SnapshotFailure`.
 Caller mistakes such as a digit outside `1` to `9` are ignored rather than thrown: a panic
 across the language boundary takes down the process, while a stray tap should only be
-dropped.
+dropped. A sudoku seed that produces no puzzle of the chosen difficulty makes
+`sudokuTryGenerate` answer null rather than panic, for the same reason: choosing a seed is not
+a reason to end the process.
 
 ## Design
 
