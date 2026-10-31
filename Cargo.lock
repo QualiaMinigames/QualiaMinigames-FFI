@@ -286,6 +286,8 @@ dependencies = [
 [[package]]
 name = "qualia-minigames-core"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3f0925e364e3f61dd3073151d26b5f8a280a7b55132d2bc2b14b5992bcd22dd"
 
 [[package]]
 name = "qualia-minigames-ffi"
