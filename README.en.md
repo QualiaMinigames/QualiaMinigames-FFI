@@ -25,7 +25,7 @@ boundary, decisions do not.
 | Item | Value |
 |---|---|
 | crate | `qualia-minigames-ffi` |
-| Version | `0.2.0` |
+| Version | `0.3.0` |
 | Type | `cdylib` + `staticlib` |
 | Edition | 2024 |
 | MSRV | **1.89** |
@@ -42,8 +42,8 @@ uniffi-bindgen generate --library target\release\qualia_minigames_ffi.dll --lang
 ```
 
 The generated Kotlin lands in `build/bindings/com/qiushui1012/app/minigames/ffi/`.
-`PipesGame`, `SudokuGame` and `MinesweeperGame` are the three games, and
-`uniffiEnsureInitialized()` must run before the first call.
+`PipesGame`, `SudokuGame`, `MinesweeperGame`, `NonogramGame` and `HashiGame` are the five
+games, and `uniffiEnsureInitialized()` must run before the first call.
 
 ## Interface
 
@@ -54,8 +54,18 @@ toggling a note, undo, the cells in conflict and the solved check. Minesweeper e
 width and height, the mine and flag counts, the mines left, the phase, the mode, the fallback
 flag, the seed, one cell's state and the whole board's state, opening a cell and flagging one;
 mine densities cross the boundary as integers in thousandths of a percent, and the core does
-the conversion. All three write themselves to bytes and read themselves back; the format
-belongs to the core, and the front end stores it without interpreting it.
+the conversion.
+
+Nonogram exports the width and height, the seed, the fallback flag, both clue lists as
+`ClueLine` records, the whole board's cell states, the rows and columns whose clues can no
+longer match, filling and marking a cell, and the solved check. Hashi exports the width and
+height, the island count, the seed, every island as an `IslandInfo` record, every joined pair
+as a `BridgeInfo` record, connecting two islands, toggling a player's mark and the solved
+check. Both expose their size ranges through exported constants, and hashi also exposes the
+slider's snap table and the conversion from a share of the board to an island count.
+
+Every game writes itself to bytes and reads itself back; the format belongs to the core, and
+the front end stores it without interpreting it.
 
 Reading a snapshot is the only operation that fails, and it fails through `SnapshotFailure`.
 Caller mistakes such as a digit outside `1` to `9` are ignored rather than thrown: a panic

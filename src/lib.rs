@@ -882,6 +882,356 @@ pub fn side_left() -> u32 {
     u32::from(qualia_minigames_core::pipes::side::LEFT)
 }
 
+/// One line's clue, as a nonogram reads it.
+///
+/// The values are the run lengths of the filled cells from the start of the line, and a line
+/// with nothing filled carries the single value zero. A record rather than a `Vec<Vec<u8>>`
+/// because a list of lists would need its own encoding; UniFFI moves a list of records by its
+/// record rule, so the caller sees one object per line.
+#[derive(Clone, Debug, Eq, PartialEq, uniffi::Record)]
+pub struct ClueLine {
+    /// The run lengths, in the order they appear along the line.
+    pub values: Vec<u8>,
+}
+
+/// One island of a hashi board, as the front end draws it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Record)]
+pub struct IslandInfo {
+    /// The row the island stands in.
+    pub row: u32,
+    /// The column the island stands in.
+    pub column: u32,
+    /// The number of bridges the island has to end up with.
+    pub clue: u8,
+    /// The number of bridges the island has now.
+    pub degree: u8,
+    /// Whether the player marked the island as solved.
+    pub marked: bool,
+}
+
+/// One pair of joined islands of a hashi board.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Record)]
+pub struct BridgeInfo {
+    /// The smaller island index.
+    pub a: u32,
+    /// The larger island index.
+    pub b: u32,
+    /// How many bridges join them, one or two.
+    pub count: u8,
+}
+
+/// One game of nonogram, as the front end holds it.
+///
+/// The board is drawn when the game is created, because a nonogram is a clue list rather than
+/// a position: there is nothing to wait for a first click for.
+#[derive(Debug, uniffi::Object)]
+pub struct NonogramGame {
+    /// The core's game, shared through the object.
+    game: Mutex<qualia_minigames_core::nonogram::Game>,
+}
+
+#[uniffi::export]
+impl NonogramGame {
+    /// Draws a board from a seed and checks that exactly one answer matches its clues.
+    ///
+    /// A random seed and a seed a player typed take the same path: both are a number the
+    /// caller produced, from the clock or from the text field, and the board is a function of
+    /// it alone.
+    #[uniffi::constructor]
+    pub fn new(width: u32, height: u32, seed: u64) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::nonogram::Game::random(
+                width, height, seed,
+            )?),
+        })
+    }
+
+    /// Reads a saved game.
+    #[uniffi::constructor]
+    pub fn from_snapshot(bytes: Vec<u8>) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::nonogram::Game::from_snapshot(
+                &bytes,
+            )?),
+        })
+    }
+
+    /// Writes the game, so it can be saved and read back.
+    pub fn to_snapshot(&self) -> Vec<u8> {
+        self.lock().to_snapshot()
+    }
+
+    /// Returns the number of cells across.
+    pub fn width(&self) -> u32 {
+        self.lock().width()
+    }
+
+    /// Returns the number of cells down.
+    pub fn height(&self) -> u32 {
+        self.lock().height()
+    }
+
+    /// Returns the number of cells on the board.
+    pub fn cell_count(&self) -> u32 {
+        self.lock().cells()
+    }
+
+    /// Returns the seed the board was drawn from.
+    pub fn seed(&self) -> u64 {
+        self.lock().seed()
+    }
+
+    /// Returns whether no unique board was found and an ambiguous one is being played.
+    pub fn fell_back(&self) -> bool {
+        self.lock().fell_back()
+    }
+
+    /// Returns the clue of each row, top to bottom.
+    pub fn row_clues(&self) -> Vec<ClueLine> {
+        self.lock()
+            .row_clues()
+            .iter()
+            .map(|values| ClueLine {
+                values: values.clone(),
+            })
+            .collect()
+    }
+
+    /// Returns the clue of each column, left to right.
+    pub fn column_clues(&self) -> Vec<ClueLine> {
+        self.lock()
+            .column_clues()
+            .iter()
+            .map(|values| ClueLine {
+                values: values.clone(),
+            })
+            .collect()
+    }
+
+    /// Returns every cell's state at once, in row-major order.
+    ///
+    /// The values are `0` for an empty cell, `1` for a filled one and `2` for a marked one.
+    pub fn cells_state(&self) -> Vec<u8> {
+        self.lock().cells_state()
+    }
+
+    /// Returns the rows whose clues the player's cells can no longer match.
+    pub fn broken_rows(&self) -> Vec<u32> {
+        self.lock().broken_rows()
+    }
+
+    /// Returns the columns whose clues the player's cells can no longer match.
+    pub fn broken_columns(&self) -> Vec<u32> {
+        self.lock().broken_columns()
+    }
+
+    /// Turns a cell filled, or back to empty.
+    ///
+    /// Returns whether the cell was changed; an index outside the board changes nothing.
+    pub fn toggle_filled(&self, index: u32) -> bool {
+        self.lock().toggle_filled(index)
+    }
+
+    /// Turns a cell marked, or back to empty.
+    ///
+    /// Returns whether the cell was changed; an index outside the board changes nothing.
+    pub fn toggle_marked(&self, index: u32) -> bool {
+        self.lock().toggle_marked(index)
+    }
+
+    /// Returns whether every row and column runs exactly as its clue says.
+    pub fn is_solved(&self) -> bool {
+        self.lock().is_solved()
+    }
+}
+
+/// The private half of [`NonogramGame`], kept out of the exported block for the reason given
+/// on [`PipesGame`]'s.
+impl NonogramGame {
+    /// Locks the game for one call.
+    fn lock(&self) -> MutexGuard<'_, qualia_minigames_core::nonogram::Game> {
+        self.game
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// One game of hashi, as the front end holds it.
+///
+/// The islands and their clues are generated when the game is created; the bridges a player
+/// builds are the only state that changes afterwards.
+#[derive(Debug, uniffi::Object)]
+pub struct HashiGame {
+    /// The core's game, shared through the object.
+    game: Mutex<qualia_minigames_core::hashi::Game>,
+}
+
+#[uniffi::export]
+impl HashiGame {
+    /// Generates a board with this many islands, or reports that the parameters leave none.
+    ///
+    /// The failure is reported rather than retried forever: a board whose island count leaves
+    /// no room for a spanning tree has to be asked for differently, and only the screen knows
+    /// how to say that to a player.
+    #[uniffi::constructor]
+    pub fn new(width: u32, height: u32, islands: u32, seed: u64) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::hashi::Game::random(
+                width, height, islands, seed,
+            )?),
+        })
+    }
+
+    /// Reads a saved game.
+    #[uniffi::constructor]
+    pub fn from_snapshot(bytes: Vec<u8>) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::hashi::Game::from_snapshot(&bytes)?),
+        })
+    }
+
+    /// Writes the game, so it can be saved and read back.
+    pub fn to_snapshot(&self) -> Vec<u8> {
+        self.lock().to_snapshot()
+    }
+
+    /// Returns the number of points across.
+    pub fn width(&self) -> u32 {
+        self.lock().width()
+    }
+
+    /// Returns the number of points down.
+    pub fn height(&self) -> u32 {
+        self.lock().height()
+    }
+
+    /// Returns how many islands the board holds.
+    pub fn island_count(&self) -> u32 {
+        self.lock().island_count()
+    }
+
+    /// Returns the seed the board was generated from.
+    pub fn seed(&self) -> u64 {
+        self.lock().seed()
+    }
+
+    /// Returns every island, in ascending point order.
+    pub fn islands(&self) -> Vec<IslandInfo> {
+        self.lock()
+            .islands()
+            .iter()
+            .map(|island| IslandInfo {
+                row: island.row(),
+                column: island.column(),
+                clue: island.clue(),
+                degree: island.degree(),
+                marked: island.marked(),
+            })
+            .collect()
+    }
+
+    /// Returns every pair of islands that has a bridge, in ascending pair order.
+    pub fn bridges(&self) -> Vec<BridgeInfo> {
+        self.lock()
+            .bridges()
+            .iter()
+            .map(|bridge| BridgeInfo {
+                a: bridge.first(),
+                b: bridge.second(),
+                count: bridge.count(),
+            })
+            .collect()
+    }
+
+    /// Cycles the bridges between two islands through zero, one and two.
+    ///
+    /// Returns whether the board changed. A connection that would break a rule is refused as
+    /// a whole, and an index outside the board is refused the same way rather than panicking:
+    /// a panic across the boundary would take down the process instead of one gesture.
+    pub fn connect(&self, first: u32, second: u32) -> bool {
+        self.lock().connect(first, second)
+    }
+
+    /// Turns the player's solved mark on an island off, or back on.
+    ///
+    /// Returns whether the island was changed; an index outside the board changes nothing.
+    pub fn toggle_mark(&self, index: u32) -> bool {
+        self.lock().toggle_mark(index)
+    }
+
+    /// Returns the islands that can no longer reach their clue.
+    ///
+    /// The screen paints these red. An island is stranded when it carries more bridges than its
+    /// clue, or when the bridges it still needs cannot all be laid in the directions it has left.
+    pub fn stranded_islands(&self) -> Vec<u32> {
+        self.lock().stranded_islands()
+    }
+
+    /// Returns whether every island carries its clue and the bridges join them all.
+    pub fn is_solved(&self) -> bool {
+        self.lock().is_solved()
+    }
+}
+
+/// The private half of [`HashiGame`], kept out of the exported block for the reason given on
+/// [`PipesGame`]'s.
+impl HashiGame {
+    /// Locks the game for one call.
+    fn lock(&self) -> MutexGuard<'_, qualia_minigames_core::hashi::Game> {
+        self.game
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Returns the smallest nonogram board, in cells on a side.
+#[uniffi::export]
+pub fn nonogram_min_size() -> u32 {
+    qualia_minigames_core::nonogram::MIN_SIZE
+}
+
+/// Returns the largest nonogram board, in cells on a side.
+#[uniffi::export]
+pub fn nonogram_max_size() -> u32 {
+    qualia_minigames_core::nonogram::MAX_SIZE
+}
+
+/// Returns the smallest hashi board, in points on a side.
+#[uniffi::export]
+pub fn hashi_min_points() -> u32 {
+    qualia_minigames_core::hashi::MIN_POINTS
+}
+
+/// Returns the largest hashi board, in points on a side.
+#[uniffi::export]
+pub fn hashi_max_points() -> u32 {
+    qualia_minigames_core::hashi::MAX_POINTS
+}
+
+/// Returns the lowest share of a hashi board that may hold islands, in thousandths.
+#[uniffi::export]
+pub fn hashi_island_per_mille_min() -> u32 {
+    qualia_minigames_core::hashi::ISLAND_PER_MILLE_MIN
+}
+
+/// Returns the highest share of a hashi board that may hold islands, in thousandths.
+#[uniffi::export]
+pub fn hashi_island_per_mille_max() -> u32 {
+    qualia_minigames_core::hashi::ISLAND_PER_MILLE_MAX
+}
+
+/// Returns the shares a hashi island slider snaps to, in thousandths.
+#[uniffi::export]
+pub fn hashi_island_snap_per_mille() -> Vec<u32> {
+    qualia_minigames_core::hashi::ISLAND_SNAP_PER_MILLE.to_vec()
+}
+
+/// Converts a share of a hashi board's points into an island count.
+#[uniffi::export]
+pub fn hashi_islands_for_per_mille(points: u32, per_mille: u32) -> u32 {
+    qualia_minigames_core::hashi::islands_for_per_mille(points, per_mille)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1184,5 +1534,189 @@ mod tests {
     #[test]
     fn the_reported_version_is_the_core_version() {
         assert_eq!(core_version(), qualia_minigames_core::VERSION);
+    }
+
+    #[test]
+    fn a_nonogram_game_crosses_the_boundary_with_its_clues() {
+        let game = NonogramGame::new(10, 10, 7).expect("the parameters are valid");
+        assert_eq!(game.width(), 10);
+        assert_eq!(game.height(), 10);
+        assert_eq!(game.cell_count(), 100);
+        let rows = game.row_clues();
+        let columns = game.column_clues();
+        assert_eq!(rows.len(), 10);
+        assert_eq!(columns.len(), 10);
+        assert!(
+            rows.iter().all(|line| !line.values.is_empty()),
+            "every row carries at least one clue value"
+        );
+        assert_eq!(game.cells_state().len(), 100);
+    }
+
+    #[test]
+    fn the_same_nonogram_seed_draws_the_same_clues_across_the_boundary() {
+        let first = NonogramGame::new(9, 7, 11).expect("the parameters are valid");
+        let second = NonogramGame::new(9, 7, 11).expect("the parameters are valid");
+        assert_eq!(first.row_clues(), second.row_clues());
+        assert_eq!(first.column_clues(), second.column_clues());
+        assert_eq!(first.seed(), second.seed());
+    }
+
+    #[test]
+    fn a_nonogram_toggle_and_its_broken_lines_are_reachable_across_the_boundary() {
+        let game = NonogramGame::new(4, 4, 3).expect("the parameters are valid");
+        assert!(game.toggle_filled(0));
+        assert_eq!(game.cells_state()[0], 1);
+        // A row whose clue is zero cannot hold a filled cell, so filling every cell of a
+        // row the clues leave empty is what makes a line broken.
+        let zero_row = (0..4_u32).find(|row| {
+            game.row_clues()[*row as usize].values == vec![0]
+                && (0..4).all(|column| game.cells_state()[(row * 4 + column) as usize] == 0)
+        });
+        if let Some(row) = zero_row {
+            for column in 0..4 {
+                game.toggle_filled(row * 4 + column);
+            }
+            assert!(
+                game.broken_rows().contains(&row),
+                "a row of four cells against a clue of zero is broken"
+            );
+        }
+        assert!(game.toggle_marked(0));
+        assert_eq!(game.cells_state()[0], 2);
+        assert!(
+            !game.toggle_filled(16),
+            "an index off the board changes nothing"
+        );
+        assert!(!game.toggle_marked(16));
+    }
+
+    #[test]
+    fn a_nonogram_snapshot_round_trips_across_the_boundary() {
+        let game = NonogramGame::new(8, 8, 5).expect("the parameters are valid");
+        game.toggle_filled(9);
+        game.toggle_marked(10);
+        let bytes = game.to_snapshot();
+        let restored = NonogramGame::from_snapshot(bytes).expect("the snapshot is intact");
+        assert_eq!(restored.cells_state(), game.cells_state());
+        assert_eq!(restored.row_clues(), game.row_clues());
+        assert_eq!(restored.column_clues(), game.column_clues());
+        assert_eq!(restored.fell_back(), game.fell_back());
+    }
+
+    #[test]
+    fn a_nonogram_outside_its_size_range_is_reported() {
+        assert!(matches!(
+            NonogramGame::new(3, 10, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+        assert!(matches!(
+            NonogramGame::new(10, 65, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+    }
+
+    #[test]
+    fn a_broken_nonogram_snapshot_is_reported_as_an_error() {
+        assert_eq!(
+            NonogramGame::from_snapshot(vec![0]).unwrap_err(),
+            SnapshotFailure::UnsupportedVersion { version: 0 }
+        );
+    }
+
+    #[test]
+    fn a_hashi_game_crosses_the_boundary_with_its_islands() {
+        let game = HashiGame::new(10, 10, 15, 7).expect("the parameters leave a board");
+        assert_eq!(game.width(), 10);
+        assert_eq!(game.height(), 10);
+        assert_eq!(game.island_count(), 15);
+        let islands = game.islands();
+        assert_eq!(islands.len(), 15);
+        assert!(islands.iter().all(|island| island.clue >= 1));
+        assert!(islands.iter().all(|island| island.degree == 0));
+        assert!(game.bridges().is_empty());
+    }
+
+    #[test]
+    fn a_hashi_connection_cycles_and_is_refused_across_the_boundary() {
+        let game = HashiGame::new(6, 6, 4, 3).expect("the parameters leave a board");
+        let islands = game.islands();
+        let joinable = (0..islands.len() as u32)
+            .find(|index| game.connect(0, *index))
+            .expect("the first island can reach another one");
+        assert_eq!(game.bridges().len(), 1);
+        assert!(game.connect(0, joinable));
+        let bridge = game.bridges()[0];
+        assert_eq!(bridge.count, 2);
+        assert!(game.connect(0, joinable));
+        assert!(game.bridges().is_empty(), "two cycles back to none");
+        assert!(!game.connect(0, 0), "an island cannot join itself");
+        assert!(!game.connect(0, 99), "an island off the board is refused");
+    }
+
+    #[test]
+    fn a_hashi_mark_crosses_the_boundary_and_does_not_solve_the_board() {
+        let game = HashiGame::new(8, 8, 10, 4).expect("the parameters leave a board");
+        assert!(!game.is_solved());
+        assert!(game.toggle_mark(0));
+        assert!(game.islands()[0].marked);
+        assert!(
+            !game.toggle_mark(99),
+            "an island off the board changes nothing"
+        );
+    }
+
+    #[test]
+    fn a_hashi_snapshot_round_trips_across_the_boundary() {
+        let game = HashiGame::new(9, 9, 12, 6).expect("the parameters leave a board");
+        game.toggle_mark(1);
+        let bytes = game.to_snapshot();
+        let restored = HashiGame::from_snapshot(bytes).expect("the snapshot is intact");
+        assert_eq!(restored.islands(), game.islands());
+        assert_eq!(restored.seed(), game.seed());
+    }
+
+    #[test]
+    fn a_hashi_board_outside_its_ranges_is_reported() {
+        assert!(matches!(
+            HashiGame::new(3, 10, 5, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+        assert!(matches!(
+            HashiGame::new(10, 36, 5, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+        assert!(matches!(
+            HashiGame::new(10, 10, 1, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+        assert!(matches!(
+            HashiGame::new(10, 10, 101, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+    }
+
+    #[test]
+    fn a_broken_hashi_snapshot_is_reported_as_an_error() {
+        assert_eq!(
+            HashiGame::from_snapshot(vec![0]).unwrap_err(),
+            SnapshotFailure::UnsupportedVersion { version: 0 }
+        );
+    }
+
+    #[test]
+    fn the_nonogram_and_hashi_constants_agree_with_the_core() {
+        assert_eq!(nonogram_min_size(), 4);
+        assert_eq!(nonogram_max_size(), 64);
+        assert_eq!(hashi_min_points(), 4);
+        assert_eq!(hashi_max_points(), 35);
+        assert_eq!(hashi_island_per_mille_min(), 100);
+        assert_eq!(hashi_island_per_mille_max(), 350);
+        assert_eq!(
+            hashi_island_snap_per_mille(),
+            vec![100, 150, 200, 250, 300, 350]
+        );
+        assert_eq!(hashi_islands_for_per_mille(16, 100), 2);
+        assert_eq!(hashi_islands_for_per_mille(1225, 350), 429);
     }
 }

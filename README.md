@@ -24,7 +24,7 @@ QualiaMinigames 的 UniFFI 绑定层。
 | 项 | 值 |
 |---|---|
 | crate 名 | `qualia-minigames-ffi` |
-| 版本 | `0.2.0` |
+| 版本 | `0.3.0` |
 | 类型 | `cdylib` + `staticlib` |
 | Edition | 2024 |
 | MSRV | **1.89** |
@@ -41,16 +41,23 @@ uniffi-bindgen generate --library target\release\qualia_minigames_ffi.dll --lang
 ```
 
 生成的 Kotlin 文件位于 `build/bindings/com/qiushui1012/app/minigames/ffi/`，其中的
-`PipesGame`、`SudokuGame` 与 `MinesweeperGame` 是三个游戏的对象，`uniffiEnsureInitialized()`
-必须在前端第一次调用之前执行。
+`PipesGame`、`SudokuGame`、`MinesweeperGame`、`NonogramGame` 与 `HashiGame` 是五个游戏的对象，
+`uniffiEnsureInitialized()` 必须在前端第一次调用之前执行。
 
 ## 接口范围
 
 接水管导出棋盘尺寸、布局、每格的边掩码、旋转、撤销、完成判定、环路格集合、水流格集合
 与水流起点。数独导出给定值、当前值、候选掩码、进入、清除、笔记开关、撤销、冲突格集合
 与完成判定。扫雷导出宽高、雷数、旗数、剩余雷数、阶段、模式、回退标记、种子、单格状态
-与批量状态、翻开、标记；雷数密度以千分之一点的整数跨边界传递，换算由 Core 完成。三者
-都能把自己写成字节数组，并由字节数组读回；字节格式由 Core 定义，前端只保存不解释。
+与批量状态、翻开、标记；雷数密度以千分之一点的整数跨边界传递，换算由 Core 完成。
+
+数织导出宽高、种子、回退标记、行与列线索（以 `ClueLine` 记录返回）、批量格子状态、当前
+无法满足的行号与列号、切换填充与切换标记、完成判定。数桥导出宽高、岛数、种子、每座岛
+（以 `IslandInfo` 记录返回）、每对已连接的岛（以 `BridgeInfo` 记录返回）、连接两座岛、
+切换玩家的已解决标记、完成判定。两者都以导出的常量给出尺寸范围，数桥另外给出滑块的吸附
+档位与格点数到岛数的换算。
+
+五者都能把自己写成字节数组，并由字节数组读回；字节格式由 Core 定义，前端只保存不解释。
 
 读取存档是唯一会失败的操作，失败以 `SnapshotFailure` 返回。数字越界这类调用方错误不会
 抛出异常，而是被忽略：跨语言边界的 panic 会终止整个进程，而一个越界的点击只应被丢弃。
