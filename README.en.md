@@ -25,7 +25,7 @@ boundary, decisions do not.
 | Item | Value |
 |---|---|
 | crate | `qualia-minigames-ffi` |
-| Version | `0.3.0` |
+| Version | `0.4.0` |
 | Type | `cdylib` + `staticlib` |
 | Edition | 2024 |
 | MSRV | **1.89** |
@@ -42,8 +42,8 @@ uniffi-bindgen generate --library target\release\qualia_minigames_ffi.dll --lang
 ```
 
 The generated Kotlin lands in `build/bindings/com/qiushui1012/app/minigames/ffi/`.
-`PipesGame`, `SudokuGame`, `MinesweeperGame`, `NonogramGame` and `HashiGame` are the five
-games, and `uniffiEnsureInitialized()` must run before the first call.
+`PipesGame`, `SudokuGame`, `MinesweeperGame`, `NonogramGame`, `HashiGame` and `ArrowCubeGame`
+are the six games, and `uniffiEnsureInitialized()` must run before the first call.
 
 ## Interface
 
@@ -61,8 +61,12 @@ Nonogram exports the width and height, the seed, the fallback flag, both clue li
 longer match, filling and marking a cell, and the solved check. Hashi exports the width and
 height, the island count, the seed, every island as an `IslandInfo` record, every joined pair
 as a `BridgeInfo` record, connecting two islands, toggling a player's mark and the solved
-check. Both expose their size ranges through exported constants, and hashi also exposes the
-slider's snap table and the conversion from a share of the board to an island count.
+check. Arrow Cube exports the width, depth and height, the cell and block counts, the remaining
+blocks, the seed, the mistakes, every block as an `ArrowCubeBlock` record, taking a block as an
+`ArrowCubeTake` record, and the solved check; its axes and directions cross as the
+`ArrowCubeAxis` and `ArrowCubeDirection` enums. All three expose their size ranges through
+exported constants, and hashi also exposes the slider's snap table and the conversion from a
+share of the board to an island count.
 
 Every game writes itself to bytes and reads itself back; the format belongs to the core, and
 the front end stores it without interpreting it.

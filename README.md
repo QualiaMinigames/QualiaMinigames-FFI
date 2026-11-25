@@ -24,7 +24,7 @@ QualiaMinigames 的 UniFFI 绑定层。
 | 项 | 值 |
 |---|---|
 | crate 名 | `qualia-minigames-ffi` |
-| 版本 | `0.3.0` |
+| 版本 | `0.4.0` |
 | 类型 | `cdylib` + `staticlib` |
 | Edition | 2024 |
 | MSRV | **1.89** |
@@ -41,8 +41,8 @@ uniffi-bindgen generate --library target\release\qualia_minigames_ffi.dll --lang
 ```
 
 生成的 Kotlin 文件位于 `build/bindings/com/qiushui1012/app/minigames/ffi/`，其中的
-`PipesGame`、`SudokuGame`、`MinesweeperGame`、`NonogramGame` 与 `HashiGame` 是五个游戏的对象，
-`uniffiEnsureInitialized()` 必须在前端第一次调用之前执行。
+`PipesGame`、`SudokuGame`、`MinesweeperGame`、`NonogramGame`、`HashiGame` 与 `ArrowCubeGame`
+是六个游戏的对象，`uniffiEnsureInitialized()` 必须在前端第一次调用之前执行。
 
 ## 接口范围
 
@@ -54,10 +54,12 @@ uniffi-bindgen generate --library target\release\qualia_minigames_ffi.dll --lang
 数织导出宽高、种子、回退标记、行与列线索（以 `ClueLine` 记录返回）、批量格子状态、当前
 无法满足的行号与列号、切换填充与切换标记、完成判定。数桥导出宽高、岛数、种子、每座岛
 （以 `IslandInfo` 记录返回）、每对已连接的岛（以 `BridgeInfo` 记录返回）、连接两座岛、
-切换玩家的已解决标记、完成判定。两者都以导出的常量给出尺寸范围，数桥另外给出滑块的吸附
-档位与格点数到岛数的换算。
+切换玩家的已解决标记、完成判定。箭立方导出宽、深、高、格子数、方块数、剩余方块数、种子、
+点错次数、全部方块（以 `ArrowCubeBlock` 记录返回）、取出一个方块（以 `ArrowCubeTake` 记录
+返回）与完成判定；轴与方向分别以 `ArrowCubeAxis`、`ArrowCubeDirection` 枚举跨边界。三者都
+以导出的常量给出尺寸范围，数桥另外给出滑块的吸附档位与格点数到岛数的换算。
 
-五者都能把自己写成字节数组，并由字节数组读回；字节格式由 Core 定义，前端只保存不解释。
+六者都能把自己写成字节数组，并由字节数组读回；字节格式由 Core 定义，前端只保存不解释。
 
 读取存档是唯一会失败的操作，失败以 `SnapshotFailure` 返回。数字越界这类调用方错误不会
 抛出异常，而是被忽略：跨语言边界的 panic 会终止整个进程，而一个越界的点击只应被丢弃。

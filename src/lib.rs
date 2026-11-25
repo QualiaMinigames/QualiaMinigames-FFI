@@ -103,6 +103,34 @@ pub enum MinesweeperEvent {
     Ignored,
 }
 
+/// The axis an arrow cube block lies along.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Enum)]
+pub enum ArrowCubeAxis {
+    /// The x axis, towards the east.
+    X,
+    /// The y axis, towards the north.
+    Y,
+    /// The z axis, upwards.
+    Z,
+}
+
+/// The direction an arrow cube block points in.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Enum)]
+pub enum ArrowCubeDirection {
+    /// Towards larger x.
+    East,
+    /// Towards smaller x.
+    West,
+    /// Towards larger y.
+    North,
+    /// Towards smaller y.
+    South,
+    /// Towards larger z.
+    Up,
+    /// Towards smaller z.
+    Down,
+}
+
 /// What can go wrong while reading a saved game.
 ///
 /// The variants mirror the core's own snapshot errors one for one. They are a separate enum
@@ -238,6 +266,29 @@ impl From<qualia_minigames_core::minesweeper::Event> for MinesweeperEvent {
             qualia_minigames_core::minesweeper::Event::HitMine => Self::HitMine,
             qualia_minigames_core::minesweeper::Event::Won => Self::Won,
             qualia_minigames_core::minesweeper::Event::Ignored => Self::Ignored,
+        }
+    }
+}
+
+impl From<qualia_minigames_core::arrow_cube::Axis> for ArrowCubeAxis {
+    fn from(axis: qualia_minigames_core::arrow_cube::Axis) -> Self {
+        match axis {
+            qualia_minigames_core::arrow_cube::Axis::X => Self::X,
+            qualia_minigames_core::arrow_cube::Axis::Y => Self::Y,
+            qualia_minigames_core::arrow_cube::Axis::Z => Self::Z,
+        }
+    }
+}
+
+impl From<qualia_minigames_core::arrow_cube::Direction> for ArrowCubeDirection {
+    fn from(direction: qualia_minigames_core::arrow_cube::Direction) -> Self {
+        match direction {
+            qualia_minigames_core::arrow_cube::Direction::East => Self::East,
+            qualia_minigames_core::arrow_cube::Direction::West => Self::West,
+            qualia_minigames_core::arrow_cube::Direction::North => Self::North,
+            qualia_minigames_core::arrow_cube::Direction::South => Self::South,
+            qualia_minigames_core::arrow_cube::Direction::Up => Self::Up,
+            qualia_minigames_core::arrow_cube::Direction::Down => Self::Down,
         }
     }
 }
@@ -1184,6 +1235,194 @@ impl HashiGame {
     }
 }
 
+/// One block of an arrow cube board, as the front end draws it.
+///
+/// `x`, `y` and `z` are the cell at the low end of the long axis. When `length` is two, the
+/// second cell is one step along `axis` in the positive direction, and `direction` is one of
+/// the two directions along that axis.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Record)]
+pub struct ArrowCubeBlock {
+    /// The block's index in the board's fixed block table.
+    pub index: u32,
+    /// The x coordinate of the low cell.
+    pub x: u32,
+    /// The y coordinate of the low cell.
+    pub y: u32,
+    /// The z coordinate of the low cell.
+    pub z: u32,
+    /// The axis the block is long along.
+    pub axis: ArrowCubeAxis,
+    /// How many cells the block covers, one or two.
+    pub length: u8,
+    /// The direction its arrow points.
+    pub direction: ArrowCubeDirection,
+    /// Whether the block has been taken out.
+    pub removed: bool,
+}
+
+/// What one tap on an arrow cube block did.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Record)]
+pub struct ArrowCubeTake {
+    /// Whether the block left the board.
+    pub removed: bool,
+    /// The block that stopped it, when one did.
+    pub blocker: Option<u32>,
+    /// How many empty cells lie between the moving block and the blocker.
+    pub gap: u32,
+    /// Whether the board is finished after this take.
+    pub solved: bool,
+}
+
+/// One game of arrow cube, as the front end holds it.
+///
+/// The board is generated when the game is created rather than on a first click: the box is
+/// solid, and every block exists from the start.
+#[derive(Debug, uniffi::Object)]
+pub struct ArrowCubeGame {
+    /// The core's game, shared through the object.
+    game: Mutex<qualia_minigames_core::arrow_cube::Game>,
+}
+
+#[uniffi::export]
+impl ArrowCubeGame {
+    /// Generates a solid box from a seed.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`SnapshotFailure::Parameter`] when a side is outside the range
+    /// [`arrow_cube_min_size`] to [`arrow_cube_max_size`].
+    #[uniffi::constructor]
+    pub fn new(width: u32, depth: u32, height: u32, seed: u64) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::arrow_cube::Game::random(
+                width, depth, height, seed,
+            )?),
+        })
+    }
+
+    /// Reads a saved game.
+    #[uniffi::constructor]
+    pub fn from_snapshot(bytes: Vec<u8>) -> Result<Self, SnapshotFailure> {
+        Ok(Self {
+            game: Mutex::new(qualia_minigames_core::arrow_cube::Game::from_snapshot(
+                &bytes,
+            )?),
+        })
+    }
+
+    /// Writes the game, so it can be saved and read back.
+    pub fn to_snapshot(&self) -> Vec<u8> {
+        self.lock().to_snapshot()
+    }
+
+    /// Returns the number of cells along x.
+    pub fn width(&self) -> u32 {
+        self.lock().width()
+    }
+
+    /// Returns the number of cells along y.
+    pub fn depth(&self) -> u32 {
+        self.lock().depth()
+    }
+
+    /// Returns the number of cells along z.
+    pub fn height(&self) -> u32 {
+        self.lock().height()
+    }
+
+    /// Returns how many cells the box holds.
+    pub fn cell_count(&self) -> u32 {
+        self.lock().cell_count()
+    }
+
+    /// Returns how many blocks the board was generated with.
+    pub fn block_count(&self) -> u32 {
+        self.lock().block_count()
+    }
+
+    /// Returns how many blocks are still in the box.
+    pub fn remaining_count(&self) -> u32 {
+        self.lock().remaining_count()
+    }
+
+    /// Returns the seed the board was generated from.
+    pub fn seed(&self) -> u64 {
+        self.lock().seed()
+    }
+
+    /// Returns how many takes have met a blocker.
+    pub fn mistakes(&self) -> u32 {
+        self.lock().mistakes()
+    }
+
+    /// Returns every block, taken ones included, in the board's fixed order.
+    pub fn blocks(&self) -> Vec<ArrowCubeBlock> {
+        self.lock()
+            .blocks()
+            .iter()
+            .enumerate()
+            .map(|(index, block)| ArrowCubeBlock {
+                index: index as u32,
+                x: block.x(),
+                y: block.y(),
+                z: block.z(),
+                axis: block.axis().into(),
+                length: block.length(),
+                direction: block.direction().into(),
+                removed: block.removed(),
+            })
+            .collect()
+    }
+
+    /// Takes a block out along its arrow.
+    ///
+    /// An index outside the table changes nothing rather than panicking: a stray tap must
+    /// not end the process.
+    pub fn take(&self, index: u32) -> ArrowCubeTake {
+        let result = self.lock().take(index);
+        ArrowCubeTake {
+            removed: result.removed(),
+            blocker: result.blocker(),
+            gap: result.gap(),
+            solved: result.solved(),
+        }
+    }
+
+    /// Returns whether every block has left.
+    pub fn is_solved(&self) -> bool {
+        self.lock().is_solved()
+    }
+}
+
+/// The private half of [`ArrowCubeGame`], kept out of the exported block for the reason given
+/// on [`PipesGame`]'s.
+impl ArrowCubeGame {
+    /// Locks the game for one call.
+    fn lock(&self) -> MutexGuard<'_, qualia_minigames_core::arrow_cube::Game> {
+        self.game
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Returns the smallest arrow cube board, in cells on a side.
+#[uniffi::export]
+pub fn arrow_cube_min_size() -> u32 {
+    qualia_minigames_core::arrow_cube::MIN_SIZE
+}
+
+/// Returns the largest arrow cube board, in cells on a side.
+#[uniffi::export]
+pub fn arrow_cube_max_size() -> u32 {
+    qualia_minigames_core::arrow_cube::MAX_SIZE
+}
+
+/// Returns the version of the arrow cube tiling and arrow choice.
+#[uniffi::export]
+pub fn arrow_cube_generation_version() -> u8 {
+    qualia_minigames_core::arrow_cube::GENERATION_VERSION
+}
+
 /// Returns the smallest nonogram board, in cells on a side.
 #[uniffi::export]
 pub fn nonogram_min_size() -> u32 {
@@ -1700,6 +1939,125 @@ mod tests {
     fn a_broken_hashi_snapshot_is_reported_as_an_error() {
         assert_eq!(
             HashiGame::from_snapshot(vec![0]).unwrap_err(),
+            SnapshotFailure::UnsupportedVersion { version: 0 }
+        );
+    }
+
+    #[test]
+    fn an_arrow_cube_game_crosses_the_boundary_with_its_blocks() {
+        let game = ArrowCubeGame::new(5, 5, 5, 7).expect("5 is a valid size");
+        assert_eq!(game.width(), 5);
+        assert_eq!(game.depth(), 5);
+        assert_eq!(game.height(), 5);
+        assert_eq!(game.cell_count(), 125);
+        assert_eq!(game.remaining_count(), game.block_count());
+        assert_eq!(game.mistakes(), 0);
+        assert!(!game.is_solved());
+        let blocks = game.blocks();
+        assert_eq!(blocks.len(), game.block_count() as usize);
+        assert_eq!(blocks[0].index, 0);
+        assert!(
+            blocks
+                .iter()
+                .all(|block| block.length == 1 || block.length == 2)
+        );
+        assert!(
+            blocks
+                .iter()
+                .filter(|block| block.length == 2)
+                .all(|block| matches!(
+                    (block.axis, block.direction),
+                    (
+                        ArrowCubeAxis::X,
+                        ArrowCubeDirection::East | ArrowCubeDirection::West
+                    ) | (
+                        ArrowCubeAxis::Y,
+                        ArrowCubeDirection::North | ArrowCubeDirection::South
+                    ) | (
+                        ArrowCubeAxis::Z,
+                        ArrowCubeDirection::Up | ArrowCubeDirection::Down
+                    )
+                ))
+        );
+    }
+
+    #[test]
+    fn the_same_arrow_cube_seed_crosses_the_boundary_twice_the_same_way() {
+        let first = ArrowCubeGame::new(6, 5, 5, 11).expect("the sizes are valid");
+        let second = ArrowCubeGame::new(6, 5, 5, 11).expect("the sizes are valid");
+        assert_eq!(first.blocks(), second.blocks());
+    }
+
+    #[test]
+    fn an_arrow_cube_take_and_its_mistake_cross_the_boundary() {
+        let game = ArrowCubeGame::new(5, 5, 5, 3).expect("the sizes are valid");
+        let mut failed = 0;
+        let mut taken = None;
+        for index in 0..game.block_count() {
+            let result = game.take(index);
+            if result.removed {
+                taken = Some(index);
+                break;
+            }
+            failed += 1;
+            assert!(result.blocker.is_some(), "a refused take names its blocker");
+            assert!(result.gap <= 30, "the gap stays inside the box");
+        }
+        let taken = taken.expect("a generated board offers a block");
+        assert_eq!(game.mistakes(), failed);
+        assert_eq!(game.remaining_count(), game.block_count() - 1);
+        assert!(game.blocks()[taken as usize].removed);
+    }
+
+    #[test]
+    fn an_arrow_cube_index_outside_the_table_is_ignored() {
+        let game = ArrowCubeGame::new(5, 5, 5, 5).expect("the sizes are valid");
+        let before = game.blocks();
+        let result = game.take(9999);
+        assert!(!result.removed);
+        assert_eq!(result.blocker, None);
+        assert_eq!(result.gap, 0);
+        assert!(!result.solved);
+        assert_eq!(game.blocks(), before);
+        assert_eq!(game.mistakes(), 0);
+    }
+
+    #[test]
+    fn an_arrow_cube_snapshot_round_trips_across_the_boundary() {
+        let game = ArrowCubeGame::new(5, 5, 5, 13).expect("the sizes are valid");
+        let mut taken = None;
+        for index in 0..game.block_count() {
+            if game.take(index).removed {
+                taken = Some(index);
+                break;
+            }
+        }
+        let taken = taken.expect("a generated board offers a block");
+        assert!(game.blocks()[taken as usize].removed);
+        let bytes = game.to_snapshot();
+        let restored = ArrowCubeGame::from_snapshot(bytes).expect("the snapshot is intact");
+        assert_eq!(restored.blocks(), game.blocks());
+        assert_eq!(restored.mistakes(), game.mistakes());
+        assert_eq!(restored.remaining_count(), game.remaining_count());
+        assert_eq!(restored.seed(), game.seed());
+    }
+
+    #[test]
+    fn an_arrow_cube_board_outside_its_range_is_reported() {
+        assert!(matches!(
+            ArrowCubeGame::new(4, 5, 5, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+        assert!(matches!(
+            ArrowCubeGame::new(5, 31, 5, 0).unwrap_err(),
+            SnapshotFailure::Parameter { .. }
+        ));
+    }
+
+    #[test]
+    fn a_broken_arrow_cube_snapshot_is_reported_as_an_error() {
+        assert_eq!(
+            ArrowCubeGame::from_snapshot(vec![0]).unwrap_err(),
             SnapshotFailure::UnsupportedVersion { version: 0 }
         );
     }
